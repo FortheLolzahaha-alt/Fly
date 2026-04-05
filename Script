@@ -22,7 +22,7 @@ local rootPart  = character:WaitForChild("HumanoidRootPart")
 -- // Settings
 local FLY_SPEED      = 50                  -- Normal speed
 local FLY_SPEED_FAST = 120                 -- Sprint speed (Left Shift)
-local TOGGLE_KEY     = Enum.KeyCode.F      -- Toggle key
+local TOGGLE_KEY     = Enum.KeyCode.M      -- Toggle key
 
 -- // State
 local flying      = false
