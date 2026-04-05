@@ -1,0 +1,136 @@
+-- // Fly Script | Xeno Executor Compatible (New & Old UI)
+-- // getgenv() guard prevents duplicate instances on re-execution
+
+if getgenv().FlyScriptLoaded then
+    getgenv().FlyScriptLoaded = false -- Signal existing loop to stop
+    task.wait(0.1)
+end
+
+getgenv().FlyScriptLoaded = true
+
+-- // Services
+local UserInputService = game:GetService("UserInputService")
+local RunService        = game:GetService("RunService")
+local Players           = game:GetService("Players")
+
+-- // Player Setup
+local player    = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoid  = character:WaitForChild("Humanoid")
+local rootPart  = character:WaitForChild("HumanoidRootPart")
+
+-- // Settings
+local FLY_SPEED      = 50                  -- Normal speed
+local FLY_SPEED_FAST = 120                 -- Sprint speed (Left Shift)
+local TOGGLE_KEY     = Enum.KeyCode.F      -- Toggle key
+
+-- // State
+local flying      = false
+local bodyVelocity = nil
+local bodyGyro     = nil
+
+-- // Cleanup helper (safe destroy)
+local function safeDestroy(obj)
+    if obj and obj.Parent then
+        pcall(function() obj:Destroy() end)
+    end
+end
+
+-- // Start Flying
+local function startFlying()
+    flying = true
+    pcall(function() humanoid.PlatformStand = true end)
+
+    bodyVelocity = Instance.new("BodyVelocity")
+    bodyVelocity.Velocity  = Vector3.zero
+    bodyVelocity.MaxForce  = Vector3.new(1e5, 1e5, 1e5)
+    bodyVelocity.Parent    = rootPart
+
+    bodyGyro = Instance.new("BodyGyro")
+    bodyGyro.MaxTorque = Vector3.new(1e5, 1e5, 1e5)
+    bodyGyro.D         = 50
+    bodyGyro.CFrame    = rootPart.CFrame
+    bodyGyro.Parent    = rootPart
+
+    print("[Fly] Flying: ON")
+end
+
+-- // Stop Flying
+local function stopFlying()
+    flying = false
+    pcall(function() humanoid.PlatformStand = false end)
+    safeDestroy(bodyVelocity)
+    safeDestroy(bodyGyro)
+    bodyVelocity = nil
+    bodyGyro     = nil
+    print("[Fly] Flying: OFF")
+end
+
+-- // Toggle on Key Press
+local inputConn = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if not getgenv().FlyScriptLoaded then return end
+    if input.KeyCode == TOGGLE_KEY then
+        if flying then stopFlying() else startFlying() end
+    end
+end)
+
+-- // Heartbeat Loop (movement)
+local heartbeatConn = RunService.Heartbeat:Connect(function()
+    if not getgenv().FlyScriptLoaded then
+        -- Script was re-executed; kill this old loop
+        stopFlying()
+        inputConn:Disconnect()
+        heartbeatConn:Disconnect()
+        return
+    end
+
+    if not flying or not bodyVelocity or not bodyGyro then return end
+
+    local camera  = workspace.CurrentCamera
+    local moveDir = Vector3.zero
+    local speed   = UserInputService:IsKeyDown(Enum.KeyCode.LeftShift)
+                    and FLY_SPEED_FAST or FLY_SPEED
+
+    -- WASD + Arrows
+    if UserInputService:IsKeyDown(Enum.KeyCode.W) or UserInputService:IsKeyDown(Enum.KeyCode.Up) then
+        moveDir = moveDir + camera.CFrame.LookVector
+    end
+    if UserInputService:IsKeyDown(Enum.KeyCode.S) or UserInputService:IsKeyDown(Enum.KeyCode.Down) then
+        moveDir = moveDir - camera.CFrame.LookVector
+    end
+    if UserInputService:IsKeyDown(Enum.KeyCode.A) or UserInputService:IsKeyDown(Enum.KeyCode.Left) then
+        moveDir = moveDir - camera.CFrame.RightVector
+    end
+    if UserInputService:IsKeyDown(Enum.KeyCode.D) or UserInputService:IsKeyDown(Enum.KeyCode.Right) then
+        moveDir = moveDir + camera.CFrame.RightVector
+    end
+
+    -- Vertical
+    if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+        moveDir = moveDir + Vector3.new(0, 1, 0)
+    end
+    if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
+        moveDir = moveDir - Vector3.new(0, 1, 0)
+    end
+
+    -- Apply
+    if moveDir.Magnitude > 0 then
+        bodyVelocity.Velocity = moveDir.Unit * speed
+        bodyGyro.CFrame       = CFrame.new(Vector3.zero, moveDir)
+    else
+        bodyVelocity.Velocity = Vector3.zero
+    end
+end)
+
+-- // Character Reset Handler
+player.CharacterAdded:Connect(function(newCharacter)
+    if not getgenv().FlyScriptLoaded then return end
+    stopFlying()
+    character = newCharacter
+    humanoid  = newCharacter:WaitForChild("Humanoid")
+    rootPart  = newCharacter:WaitForChild("HumanoidRootPart")
+    print("[Fly] Character respawned — fly reset.")
+end)
+
+print("[Fly] Script loaded. Press [F] to toggle flying.")
